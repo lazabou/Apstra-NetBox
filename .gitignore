@@ -1,0 +1,10 @@
+# Secrets - jamais sur GitHub
+netbox.secrets.tfvars
+
+# Fichiers générés par Terraform - jamais sur GitHub
+*.tfstate
+*.tfstate.backup
+.terraform/
+.terraform.lock.hcl
+crash.log
+.DS_Store
