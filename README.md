@@ -1,20 +1,40 @@
-# Terraform — NetBox to Apstra
+# Apstra-NetBox
 
-This Terraform project automatically provisions an **Juniper Apstra** data center blueprint from data stored in **NetBox**. Instead of defining VRFs, VLANs, and server connectivity manually in `.tfvars` files, all network intent is sourced from NetBox via its REST API and translated into Apstra resources.
+This Terraform project automatically provisions a **Juniper Apstra** data center blueprint from data stored in **NetBox**. Instead of defining VRFs, VLANs, and server connectivity manually in `.tfvars` files, all network intent is sourced from NetBox via its REST API and translated into Apstra resources.
 
 ---
 
-## Project Overview
+## How It Works
+
+Terraform connects to two systems simultaneously using two different providers:
 
 ```
-NetBox (source of truth)
-    │
-    ├── VRFs          ──►  Apstra Routing Zones
-    ├── VLANs         ──►  Apstra Virtual Networks + Connectivity Templates
-    └── Servers       ──►  Apstra Generic Systems + CT Assignments
+┌──────────────────────────────────────────────────────────────────────┐
+│                            Terraform                                 │
+│                                                                      │
+│   ┌──────────────────────────────┐  ┌───────────────────────────┐   │
+│   │    hashicorp/http provider   │  │   Juniper/apstra provider │   │
+│   │    REST API calls (read)     │  │   CRUD operations         │   │
+│   └──────────────┬───────────────┘  └─────────────┬─────────────┘   │
+└──────────────────┼──────────────────────────────────┼────────────────┘
+                   │                                  │
+                   ▼                                  ▼
+      ┌────────────────────────┐        ┌─────────────────────────┐
+      │        NetBox          │        │    Apstra Controller    │
+      │   (source of truth)    │        │   (network automation)  │
+      │                        │        │                         │
+      │  · VRFs (l3vni)        │  ───►  │  · Routing Zones        │
+      │  · VLANs (vid, vrf)    │  ───►  │  · Virtual Networks     │
+      │  · Servers (cables,    │  ───►  │  · Generic Systems      │
+      │    lag_mode, vlans)    │        │  · Connectivity Tmpls   │
+      └────────────────────────┘        └─────────────────────────┘
 ```
 
-The project uses the **hashicorp/http** Terraform provider to call the NetBox REST API directly. NetBox integration is optional: if `netbox_token` is left empty, no NetBox data is fetched.
+**hashicorp/http** is used exclusively for **reading** data from NetBox — it issues plain HTTP GET requests against the NetBox REST API and parses the JSON responses. No NetBox Terraform provider is required.
+
+**Juniper/apstra** handles all **write** operations: creating and updating routing zones, virtual networks, generic systems, connectivity templates, pool allocations, and deploying the blueprint.
+
+NetBox integration is optional: if `netbox_token` is left empty, no NetBox data is fetched and no dynamic resources are created.
 
 ---
 
@@ -139,6 +159,25 @@ Speed is inferred from the NetBox interface **type** field (e.g. `10gbase-cu` �
 | `link_pool` | `terraform.tfvars` | Fabric link IP pool name and prefix |
 | `asn_pool` | `terraform.tfvars` | ASN pool name and range |
 | `vni_pool` | `terraform.tfvars` | VNI pool name and range |
+
+---
+
+## Secrets File
+
+Create `netbox.secrets.tfvars` (not committed to git) with your credentials:
+
+```hcl
+# Apstra controller URL — include credentials in the URL
+apstra_url = "https://admin:password@192.168.1.100"
+
+# NetBox base URL (no trailing slash)
+netbox_url = "http://netbox.example.com"
+
+# NetBox API token — generate one under Profile > API Tokens in NetBox
+netbox_token = "your_netbox_api_token_here"
+```
+
+Leave `netbox_token` empty (`""`) to run without NetBox integration.
 
 ---
 
